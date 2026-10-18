@@ -1,0 +1,355 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="theme-color" content="#111820">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
+    <link rel="stylesheet" href="css/dashboard.css">
+    <title>Dashboard</title>
+</head>
+
+<body>
+    <div id="app">
+
+        <!-- PAGE 0: AUDIO OVERLAY -->
+
+        <div id="audio-start-overlay" class="audio-start-overlay">
+            <div class="audio-start-content">
+                <div class="audio-start-title">Islamic Dashboard</div>
+                <div class="audio-start-description">
+                    Tap below to enable audio for scheduled Quran recitation.
+                </div>
+                <button id="audio-start-button" class="audio-start-button" type="button">
+                    ENABLE AUDIO &amp; CONTINUE
+                </button>
+                <div class="audio-start-note">
+                    Please keep this dashboard open for scheduled playback.
+                </div>
+            </div>
+        </div>
+
+        <!-- PAGE 1: TIME -->
+
+        <section class="page active" id="time-page">
+            <div class="topline">
+                <div class="topline-left">
+                    <div class="eyebrow">CURRENT DATE & TIME</div>
+                </div>
+                <div class="topline-right">
+                    <div class="location">DUBAI, UAE</div>
+                </div>
+            </div>
+
+            <div class="time-content">
+                <div id="clock">
+                    <span id="clock-time">--:--</span><span id="ampm"></span>
+                </div>
+
+                <div id="gregorian-date">Loading date...</div>
+
+                <div class="hijri-container">
+                    <div class="hijri-english" id="hijri-english">Loading Hijri date...</div>
+                    <div class="hijri-arabic" id="hijri-arabic" lang="ar" dir="rtl">...</div>
+                </div>
+            </div>
+
+            <div class="time-bottom">
+                <div id="time-next-prayer-label">NEXT SALAH</div>
+                <div id="time-next-prayer">Loading prayer times...</div>
+            </div>
+
+            <div class="footer">
+                <span class="footer-left">TIME</span>
+                <button type="button" class="settings-button">
+                    <i class="bi bi-gear-fill"></i> SETTINGS
+                </button>
+                <span class="footer-right">LEFT: BACK &nbsp; RIGHT: NEXT
+                    <span class="page-indicators">
+                        <span class="dot selected">●</span>
+                        <span class="dot">●</span>
+                        <span class="dot">●</span>
+                    </span>
+                </span>
+            </div>
+        </section>
+
+        <!-- PAGE 2: WEATHER -->
+
+        <section class="page" id="weather-page">
+            <div class="topline">
+                <div class="topline-left">
+                    <div class="eyebrow">Local Conditions</div>
+                </div>
+                <div class="topline-right">
+                    <div class="location">DUBAI, UAE</div>
+                </div>
+            </div>
+
+            <div class="weather-content">
+                <div class="weather-main">
+                    <div class="weather-left">
+                        <div id="weather-icon">&#9728;</div>
+                        <div id="weather-condition" class="weather-condition">Loading weather...</div>
+                        <div id="weather-feels" class="weather-feels">Feels like --°</div>
+                    </div>
+
+                    <div class="weather-right">
+                        <div id="temperature">--°</div>
+
+                        <div class="weather-stats">
+                            <div class="weather-stat">
+                                <div class="weather-stat-label">Humidity</div>
+                                <div class="weather-stat-value" id="weather-humidity">--%</div>
+                            </div>
+
+                            <div class="weather-stat">
+                                <div class="weather-stat-label">Wind</div>
+                                <div class="weather-stat-value" id="weather-wind">-- km/h</div>
+                            </div>
+
+                            <div class="weather-stat">
+                                <div class="weather-stat-label">Sunrise</div>
+                                <div class="weather-stat-value" id="weather-sunrise">--:--</div>
+                            </div>
+
+                            <div class="weather-stat">
+                                <div class="weather-stat-label">Sunset</div>
+                                <div class="weather-stat-value" id="weather-sunset">--:--</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="footer">
+                <span class="footer-left">WEATHER</span>
+                <button type="button" class="settings-button">
+                    <i class="bi bi-gear-fill"></i> SETTINGS
+                </button>
+                <span class="footer-right">LEFT: BACK &nbsp; RIGHT: NEXT
+                    <span class="page-indicators">
+                        <span class="dot">●</span>
+                        <span class="dot selected">●</span>
+                        <span class="dot">●</span>
+                    </span>
+                </span>
+            </div>
+        </section>
+
+        <!-- PAGE 3: SALAH -->
+
+        <section class="page" id="prayer-page">
+            <div class="topline">
+                <div class="topline-left">
+                    <div class="eyebrow">Daily Salah Times</div>
+                </div>
+                <div class="topline-right">
+                    <div class="location">DUBAI, UAE</div>
+                </div>
+            </div>
+
+            <div class="prayer-content">
+                <div class="prayer-heading">
+                    <div class="title-container">
+                        <div class="title">SALAH</div>
+                        <div class="arabic-title" lang="ar" dir="rtl">ٱلصَّلَاةُ</div>
+                    </div>
+                    <div class="subtitle" id="prayer-date">Loading date...</div>
+                </div>
+
+                <div class="prayer-list">
+                    <div class="prayer-row" id="prayer-fajr">
+                        <div class="prayer-labels">
+                            <span class="prayer-name">Fajr</span>
+                            <span class="prayer-arabic" lang="ar" dir="rtl">الفجر</span>
+                        </div>
+                        <div class="prayer-time" id="time-fajr">--:--</div>
+                    </div>
+
+                    <div class="prayer-row" id="prayer-sunrise">
+                        <div class="prayer-labels">
+                            <span class="prayer-name">Sunrise</span>
+                            <span class="prayer-arabic" lang="ar" dir="rtl">الشروق</span>
+                        </div>
+                        <div class="prayer-time" id="time-sunrise">--:--</div>
+                    </div>
+
+                    <div class="prayer-row" id="prayer-dhuhr">
+                        <div class="prayer-labels">
+                            <span class="prayer-name">Dhuhr</span>
+                            <span class="prayer-arabic" lang="ar" dir="rtl">الظهر</span>
+                        </div>
+                        <div class="prayer-time" id="time-dhuhr">--:--</div>
+                    </div>
+
+                    <div class="prayer-row" id="prayer-asr">
+                        <div class="prayer-labels">
+                            <span class="prayer-name">Asr</span>
+                            <span class="prayer-arabic" lang="ar" dir="rtl">العصر</span>
+                        </div>
+                        <div class="prayer-time" id="time-asr">--:--</div>
+                    </div>
+
+                    <div class="prayer-row" id="prayer-maghrib">
+                        <div class="prayer-labels">
+                            <span class="prayer-name">Maghrib</span>
+                            <span class="prayer-arabic" lang="ar" dir="rtl">المغرب</span>
+                        </div>
+                        <div class="prayer-time" id="time-maghrib">--:--</div>
+                    </div>
+
+                    <div class="prayer-row" id="prayer-isha">
+                        <div class="prayer-labels">
+                            <span class="prayer-name">Isha</span>
+                            <span class="prayer-arabic" lang="ar" dir="rtl">العشاء</span>
+                        </div>
+                        <div class="prayer-time" id="time-isha">--:--</div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="footer">
+                <span class="footer-left">SALAH</span>
+                <button type="button" class="settings-button">
+                    <i class="bi bi-gear-fill"></i> SETTINGS
+                </button>
+                <span class="footer-right">LEFT: BACK &nbsp; RIGHT: NEXT
+                    <span class="page-indicators">
+                        <span class="dot">●</span>
+                        <span class="dot">●</span>
+                        <span class="dot selected">●</span>
+                    </span>
+                </span>
+            </div>
+        </section>
+
+        <!-- SETTINGS MODAL -->
+        <div id="settings-modal" class="settings-overlay" aria-hidden="true">
+            <div class="settings-modal" role="dialog" aria-modal="true" aria-labelledby="settings-title">
+
+                <div class="settings-header">
+                    <h2 id="settings-title">Dashboard Settings</h2>
+                    <button type="button" id="settings-close" class="settings-close" aria-label="Close settings">
+                        &times;
+                    </button>
+                </div>
+
+                <div class="settings-content">
+
+                    <section class="settings-section">
+                        <h3>Appearance</h3>
+
+                        <label for="theme-mode">Theme mode</label>
+                        <select id="theme-mode">
+                            <option value="auto">Automatic — sunrise/sunset</option>
+                            <option value="day">Day</option>
+                            <option value="night">Night</option>
+                        </select>
+
+                        <label for="theme-colour">Colour theme</label>
+                        <select id="theme-colour">
+                            <option value="warm">Warm Sand</option>
+                            <option value="ocean">Deep Ocean</option>
+                            <option value="forest">Forest</option>
+                            <option value="plum">Royal Plum</option>
+                            <option value="teal">Desert Oasis</option>
+                            <option value="rose">Dusty Rose</option>
+                        </select>
+                    </section>
+
+                    <section class="settings-section">
+                        <h3>Scheduled recordings</h3>
+
+                        <div class="setting-row">
+                            <label for="audio-baqarah-enabled">Surah Al-Baqarah</label>
+                            <select id="audio-baqarah-enabled">
+                                <option value="on">On</option>
+                                <option value="off">Off</option>
+                            </select>
+                        </div>
+
+                        <div class="setting-row">
+                            <label for="audio-yaseen-enabled">Surah Yaseen</label>
+                            <select id="audio-yaseen-enabled">
+                                <option value="on">On</option>
+                                <option value="off">Off</option>
+                            </select>
+                        </div>
+
+                        <div class="setting-row">
+                            <label for="audio-kahf-enabled">Surah Kahf (Friday)</label>
+                            <select id="audio-kahf-enabled">
+                                <option value="on">On</option>
+                                <option value="off">Off</option>
+                            </select>
+                        </div>
+
+                        <section class="settings-section">
+                            <h3>Narration</h3>
+
+                            <label for="narrator-baqarah">Al-Baqarah reciter</label>
+                            <select id="narrator-baqarah">
+                                <option value="mishary">Sheikh Mishary Rashid Alafasy</option>
+                            </select>
+
+                            <label for="narrator-yaseen">Yaseen reciter</label>
+                            <select id="narrator-yaseen">
+                                <option value="mishary">Sheikh Mishary Rashid Alafasy</option>
+                            </select>
+
+                            <label for="narrator-kahf">Kahf reciter</label>
+                            <select id="narrator-kahf">
+                                <option value="mishary">Sheikh Mishary Rashid Alafasy</option>
+                            </select>
+                        </section>
+
+                        <section class="settings-section">
+                            <h3>Audio Test</h3>
+
+                            <label for="audio-test-track">Select recording</label>
+                            <select id="audio-test-track">
+                                <option value="baqarah">Surah Al-Baqarah</option>
+                                <option value="yaseen">Surah Yaseen</option>
+                                <option value="kahf">Surah Al-Kahf</option>
+                            </select>
+
+                            <div class="audio-test-controls">
+                                <button type="button" id="audio-test-beep">
+                                    Test Beep
+                                </button>
+
+                                <button type="button" id="audio-test-play">
+                                    Play MP3
+                                </button>
+
+                                <button type="button" id="audio-test-stop">
+                                    Stop Audio
+                                </button>
+                            </div>
+
+                            <div id="audio-test-status" class="settings-status" role="status" aria-live="polite">
+                                Audio ready.
+                            </div>
+                        </section>
+
+                        <div id="settings-status" class="settings-status" role="status" aria-live="polite">
+                            Settings are saved automatically.
+                        </div>
+
+                </div>
+            </div>
+        </div>
+
+    </div>
+
+    <script src="js/dashboard.js"></script>
+    <script src="js/settings.js"></script>
+    <script src="js/audio.js"></script>
+
+</body>
+
+</html>

@@ -1,0 +1,23 @@
+{
+    "baqarah": [
+        {
+            "id": "mishary",
+            "label": "Sheikh Mishary Rashid Alafasy",
+            "file": "audio/quran/baqarah-mishary.mp3"
+        }
+    ],
+    "yaseen": [
+        {
+            "id": "mishary",
+            "label": "Sheikh Mishary Rashid Alafasy",
+            "file": "audio/quran/yaseen-mishary.mp3"
+        }
+    ],
+    "kahf": [
+        {
+            "id": "mishary",
+            "label": "Sheikh Mishary Rashid Alafasy",
+            "file": "audio/quran/kahf-mishary.mp3"
+        }
+    ]
+}
