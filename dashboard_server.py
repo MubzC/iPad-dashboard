@@ -11,8 +11,7 @@ from urllib.request import Request, urlopen
 
 DASHBOARD_DIR = r"./"
 
-HOST = "0.0.0.0"
-PORT = 8000
+PORT = int(os.environ.get("PORT", 8000))
 
 logging.basicConfig(
     level=logging.INFO,
