@@ -735,34 +735,60 @@
     /* LOCATION */
 
     function loadLocation(callback) {
-        requestJSON("/api/location", function (error, data) {
-            if (error || !data ||
-                !isFinite(parseFloat(data.latitude)) ||
-                !isFinite(parseFloat(data.longitude))) {
+        function applyLocation(latitude, longitude, source) {
+            locationData.latitude = latitude;
+            locationData.longitude = longitude;
+            locationData.method = String(locationData.method || "4");
 
-                console.log("Location loading failed:", error || data);
-
-                if (callback) {
-                    callback(error || new Error("Invalid location data"));
-                }
-
-                return;
-            }
-
-            locationData.latitude = parseFloat(data.latitude);
-            locationData.longitude = parseFloat(data.longitude);
-            locationData.city = data.city || "";
-            locationData.country = data.country || "";
-            locationData.countryCode = data.countryCode || "";
-            locationData.timezone = data.timezone || "Asia/Dubai";
-            locationData.method = String(data.method || "4");
-
-            console.log("Location loaded:", locationData);
+            console.log("Location loaded from " + source + ":", {
+                latitude: latitude,
+                longitude: longitude
+            });
 
             if (callback) {
                 callback(null);
             }
-        });
+        }
+
+        // Prefer the iPad's actual location over the server's IP location.
+        if (navigator.geolocation) {
+            navigator.geolocation.getCurrentPosition(
+                function (position) {
+                    applyLocation(
+                        position.coords.latitude,
+                        position.coords.longitude,
+                        "iPad GPS/browser geolocation"
+                    );
+                },
+                function (error) {
+                    console.warn(
+                        "Browser geolocation unavailable; using configured Dubai location.",
+                        error.message
+                    );
+
+                    // Keep the existing Dubai defaults.
+                    if (callback) {
+                        callback(null);
+                    }
+                },
+                {
+                    enableHighAccuracy: false,
+                    timeout: 10000,
+                    maximumAge: 900000
+                }
+            );
+
+            return;
+        }
+
+        // Browser geolocation is unavailable. Keep the configured defaults.
+        console.warn(
+            "Browser geolocation is not supported; using configured location."
+        );
+
+        if (callback) {
+            callback(null);
+        }
     }
 
     /* START */
