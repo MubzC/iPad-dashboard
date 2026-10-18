@@ -35,6 +35,11 @@
 
     var prayerData = null;
     var weatherData = null;
+    var tomorrowFajrCache = null;
+    var tomorrowFajrCacheKey = "";
+    var tomorrowFajrLoadingKey = "";
+    var tomorrowFajrLastAttemptKey = "";
+    var tomorrowFajrLastAttempt = 0;
     var sunriseMinutes = 360;
     var sunsetMinutes = 1080;
     var isDaytime = true;
@@ -410,6 +415,121 @@
         return hours * 60 + minutes;
     }
 
+    function formatPrayerTime(value) {
+        var minutes = parsePrayerMinutes(value);
+
+        if (minutes === null) {
+            return null;
+        }
+
+        var hours = Math.floor(minutes / 60);
+        var mins = minutes % 60;
+        var displayHours = hours % 12;
+
+        if (displayHours === 0) {
+            displayHours = 12;
+        }
+
+        return displayHours + ":" + pad(mins) +
+            (hours >= 12 ? " PM" : " AM");
+    }
+
+    function getTomorrowFajrKey(date) {
+        var tomorrow = new Date(date);
+        tomorrow.setDate(tomorrow.getDate() + 1);
+
+        return getDateKey(tomorrow) + "|" +
+            locationData.latitude + "|" +
+            locationData.longitude + "|" +
+            locationData.method;
+    }
+
+    function loadTomorrowFajr(date) {
+        var tomorrow = new Date(date);
+        tomorrow.setDate(tomorrow.getDate() + 1);
+
+        var dateKey = getDateKey(tomorrow);
+        var cacheKey = getTomorrowFajrKey(date);
+
+        var nextPrayerDisplay = byId("time-next-prayer");
+
+        // Use the cached result if it matches tomorrow and this location.
+        if (
+            tomorrowFajrCache &&
+            tomorrowFajrCacheKey === cacheKey
+        ) {
+            nextPrayerDisplay.innerHTML =
+                "Fajr · " + tomorrowFajrCache;
+
+            return;
+        }
+
+        // Avoid duplicate simultaneous requests.
+        if (tomorrowFajrLoadingKey === cacheKey) {
+            return;
+        }
+
+        // Don't retry a failed request every minute.
+        if (
+            tomorrowFajrLastAttemptKey === cacheKey &&
+            Date.now() - tomorrowFajrLastAttempt < 300000
+        ) {
+            nextPrayerDisplay.innerHTML = "Fajr · Unavailable";
+            return;
+        }
+
+        tomorrowFajrLoadingKey = cacheKey;
+        tomorrowFajrLastAttemptKey = cacheKey;
+        tomorrowFajrLastAttempt = Date.now();
+
+        nextPrayerDisplay.innerHTML = "Fajr · Loading…";
+
+        var url = "/api/prayer?date=" +
+            encodeURIComponent(getDateForAPI(tomorrow)) +
+            "&latitude=" +
+            encodeURIComponent(locationData.latitude) +
+            "&longitude=" +
+            encodeURIComponent(locationData.longitude) +
+            "&timezone=" +
+            encodeURIComponent(locationData.timezone) +
+            "&method=" +
+            encodeURIComponent(locationData.method);
+
+        requestJSON(url, function (error, data) {
+            tomorrowFajrLoadingKey = "";
+
+            if (
+                error ||
+                !data ||
+                !data.data ||
+                !data.data.timings ||
+                !data.data.timings.Fajr
+            ) {
+                console.warn(
+                    "Unable to load tomorrow's Fajr:",
+                    error || data
+                );
+
+                nextPrayerDisplay.innerHTML = "Fajr · Unavailable";
+                return;
+            }
+
+            var formatted = formatPrayerTime(
+                data.data.timings.Fajr
+            );
+
+            if (!formatted) {
+                nextPrayerDisplay.innerHTML = "Fajr · Unavailable";
+                return;
+            }
+
+            tomorrowFajrCache = formatted;
+            tomorrowFajrCacheKey = cacheKey;
+
+            // Refresh the next-prayer display using the new data.
+            updatePrayerHighlights();
+        });
+    }
 
     function updatePrayerHighlights() {
         if (!prayerData || !prayerData.timings) {
@@ -527,10 +647,11 @@
         }
 
         /*
-         * Find the next Salah.
-         * If all today's Salah times have passed, tomorrow's Fajr
-         * is the next Salah.
-         */
+        * Find the next Salah.
+        * After today's Isha, fetch tomorrow's Fajr rather than
+        * displaying today's Fajr time.
+        */
+
         var nextPrayer = null;
 
         for (var m = 0; m < prayers.length; m++) {
@@ -540,17 +661,19 @@
             }
         }
 
-        if (nextPrayer === null) {
-            nextPrayer = prayers[0];
-        }
-
-        var nextPrayerTime = byId("time-" + nextPrayer.key);
+        var nextPrayerTime = null;
         var nextPrayerDisplay = byId("time-next-prayer");
 
-        if (nextPrayerTime && nextPrayerDisplay) {
-            nextPrayerDisplay.innerHTML =
-                nextPrayer.name + " · " +
-                nextPrayerTime.innerHTML;
+        if (nextPrayer === null) {
+            loadTomorrowFajr(now);
+        } else {
+            nextPrayerTime = byId("time-" + nextPrayer.key);
+
+            if (nextPrayerTime && nextPrayerDisplay) {
+                nextPrayerDisplay.innerHTML =
+                    nextPrayer.name + " · " +
+                    nextPrayerTime.innerHTML;
+            }
         }
 
         /*
@@ -738,6 +861,9 @@
         function applyLocation(latitude, longitude, source) {
             locationData.latitude = latitude;
             locationData.longitude = longitude;
+            locationData.timezone =
+                Intl.DateTimeFormat().resolvedOptions().timeZone ||
+                locationData.timezone;
             locationData.method = String(locationData.method || "4");
 
             console.log("Location loaded from " + source + ":", {
