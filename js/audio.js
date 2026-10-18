@@ -81,7 +81,7 @@ var trackStartTimer = null;
 var CHECK_INTERVAL = 5000;
 var RECOVERY_WINDOW_MINUTES = 10;
 
-var TEST_SCHEDULE_ENABLED = true;
+var TEST_SCHEDULE_ENABLED = false;
 var TEST_SCHEDULE_TIME = new Date(Date.now() + 60000);
 
 var PLAYBACK_START_TIMEOUT_MS = 20000;
