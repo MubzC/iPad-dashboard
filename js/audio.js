@@ -563,7 +563,19 @@ function playSequence(tracks, description) {
         "; tracks=" + tracks.join(",")
     );
 
-    stopAudio(false);
+    // Never restart a sequence that is already playing.
+    if (activeSequence !== null) {
+        audioDebug(
+            "Sequence ignored because another sequence is active: " +
+            activeSequence.description
+        );
+        return;
+    }
+
+    stopBeep();
+    clearTrackStartTimer();
+
+    sequenceToken++;
 
     var thisSequenceToken = sequenceToken;
     var index = 0;
@@ -870,6 +882,14 @@ function getScheduledTracks(scheduleType) {
 function checkSchedule() {
     try {
         var now = new Date();
+
+        if (activeSequence !== null) {
+            audioDebug(
+                "Schedule check skipped: sequence already active: " +
+                activeSequence.description
+            );
+            return;
+        }
 
         audioDebug(
             "checkSchedule running; time=" +
