@@ -1,5 +1,4 @@
 import json
-import logging
 import os
 import re
 import threading
@@ -20,11 +19,6 @@ HOST = "0.0.0.0"
 API_CACHE = {}
 API_CACHE_LOCK = threading.Lock()
 API_RETRY_AFTER = {}
-
-logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s [%(levelname)s] %(message)s"
-)
 
 
 class DashboardHandler(SimpleHTTPRequestHandler):
@@ -61,39 +55,22 @@ class DashboardHandler(SimpleHTTPRequestHandler):
         return json.loads(body.decode("utf-8"))
 
     def proxy_json(self, url):
-        
         try:
             data = self.fetch_json(url)
             self.send_json(200, data)
 
         except HTTPError as exc:
-            logging.error(
-                "External API returned HTTP %s: %s",
-                exc.code,
-                url
-            )
-
             self.send_json(502, {
                 "error": "External API returned an HTTP error",
                 "upstream_status": exc.code
             })
 
-        except (URLError, TimeoutError, OSError) as exc:
-            logging.error(
-                "External API connection failed: %s",
-                exc
-            )
-
+        except (URLError, TimeoutError, OSError):
             self.send_json(502, {
                 "error": "Could not connect to external API"
             })
 
-        except (ValueError, UnicodeDecodeError) as exc:
-            logging.error(
-                "Invalid API response: %s",
-                exc
-            )
-
+        except (ValueError, UnicodeDecodeError):
             self.send_json(502, {
                 "error": "External API returned invalid JSON"
             })
@@ -118,8 +95,7 @@ class DashboardHandler(SimpleHTTPRequestHandler):
 
         now = time.time()
 
-        # Serialize cache checks and upstream requests to avoid
-        # simultaneous requests for the same cached resource.
+        # Serialize cache checks and upstream requests.
         with API_CACHE_LOCK:
             entry = API_CACHE.get(cache_key)
 
@@ -128,15 +104,11 @@ class DashboardHandler(SimpleHTTPRequestHandler):
                 self.send_json(200, entry["data"])
                 return
 
-            # If we've recently been rate-limited, avoid retrying.
+            # Avoid repeatedly contacting a rate-limited API.
             retry_after = API_RETRY_AFTER.get(cache_key, 0)
 
             if now < retry_after:
                 if entry and now - entry["fetched_at"] < stale_ttl:
-                    logging.warning(
-                        "Rate-limit cooldown: serving cached data for %s",
-                        cache_key
-                    )
                     self.send_json(200, entry["data"])
                 else:
                     self.send_json(503, {
@@ -158,24 +130,14 @@ class DashboardHandler(SimpleHTTPRequestHandler):
                 self.send_json(200, data)
 
             except HTTPError as exc:
-                logging.warning(
-                    "Upstream API returned HTTP %s for %s",
-                    exc.code,
-                    cache_key
-                )
-
                 if exc.code == 429:
                     API_RETRY_AFTER[cache_key] = time.time() + 60
 
-                # A cached response is preferable to no weather data.
+                # Prefer cached data when the upstream API fails.
                 if (
                     entry
                     and time.time() - entry["fetched_at"] < stale_ttl
                 ):
-                    logging.warning(
-                        "Serving stale cached data for %s",
-                        cache_key
-                    )
                     self.send_json(200, entry["data"])
                 else:
                     self.send_json(502, {
@@ -183,13 +145,7 @@ class DashboardHandler(SimpleHTTPRequestHandler):
                         "upstream_status": exc.code
                     })
 
-            except (URLError, TimeoutError, OSError) as exc:
-                logging.warning(
-                    "API connection failed for %s: %s",
-                    cache_key,
-                    exc
-                )
-
+            except (URLError, TimeoutError, OSError):
                 if (
                     entry
                     and time.time() - entry["fetched_at"] < stale_ttl
@@ -200,13 +156,7 @@ class DashboardHandler(SimpleHTTPRequestHandler):
                         "error": "Could not connect to external API"
                     })
 
-            except (ValueError, UnicodeDecodeError) as exc:
-                logging.warning(
-                    "Invalid API response for %s: %s",
-                    cache_key,
-                    exc
-                )
-
+            except (ValueError, UnicodeDecodeError):
                 if (
                     entry
                     and time.time() - entry["fetched_at"] < stale_ttl
@@ -242,8 +192,7 @@ class DashboardHandler(SimpleHTTPRequestHandler):
         if not (-180 <= longitude <= 180):
             raise ValueError("Invalid longitude")
 
-        # Dubai's calculation method is used only when the detected
-        # location is Dubai in the United Arab Emirates.
+        # Use method 16 for Dubai, UAE; method 4 elsewhere.
         if (
             city.lower() == "dubai"
             and country_code.upper() == "AE"
@@ -263,64 +212,9 @@ class DashboardHandler(SimpleHTTPRequestHandler):
         }
 
     def do_POST(self):
-        parsed = urlparse(self.path)
+        # Diagnostic POST endpoints have been removed.
+        self.send_json(404, {"error": "Not found"})
 
-        if parsed.path not in (
-            "/api/audio-debug",
-            "/api/location-log"
-        ):
-            self.send_json(404, {"error": "Not found"})
-            return
-
-        try:
-            content_length = int(
-                self.headers.get("Content-Length", "0")
-            )
-
-            if content_length <= 0 or content_length > 4096:
-                self.send_json(400, {"error": "Invalid message size"})
-                return
-
-            body = self.rfile.read(content_length)
-            data = json.loads(body.decode("utf-8"))
-
-            device_ip = self.client_address[0]
-
-            if parsed.path == "/api/audio-debug":
-                message = str(data.get("message", ""))[:1000]
-
-                logging.info(
-                    "[AUDIO DEBUG] [%s] %s",
-                    device_ip,
-                    message
-                )
-
-                self.send_json(200, {"ok": True})
-                return
-
-        # Location diagnostics
-        source = str(data.get("source", "unknown"))[:100]
-        message = str(data.get("message", ""))[:500]
-        user_agent = str(data.get("userAgent", ""))[:300]
-
-        latitude = data.get("latitude")
-        longitude = data.get("longitude")
-
-        logging.info(
-            "[LOCATION] device_ip=%s source=%s lat=%s lon=%s message=%s user_agent=%s",
-            device_ip,
-            source,
-            latitude,
-            longitude,
-            message,
-            user_agent
-        )
-
-        self.send_json(200, {"ok": True})
-
-    except (ValueError, UnicodeDecodeError):
-        self.send_json(400, {"error": "Invalid JSON"})
-    
     def do_GET(self):
         parsed = urlparse(self.path)
         path = parsed.path
@@ -332,24 +226,9 @@ class DashboardHandler(SimpleHTTPRequestHandler):
         if path == "/api/location":
             try:
                 location = self.get_location()
-
-                logging.info(
-                    "Detected location: %s, %s | method=%s",
-                    location["city"],
-                    location["country"],
-                    location["method"]
-                )
-
                 self.send_json(200, location)
 
-            except Exception as exc:
-                logging.error(
-                    "Location detection failed: %s",
-                    exc
-                )
-
-                # Do not silently report Dubai when detection fails.
-                # The dashboard can display a location error instead.
+            except Exception:
                 self.send_json(502, {
                     "error": "Could not detect location"
                 })
@@ -403,7 +282,11 @@ class DashboardHandler(SimpleHTTPRequestHandler):
 
             self.cached_proxy_json(
                 url,
-                cache_key=("weather", round(lat, 3), round(lon, 3)),
+                cache_key=(
+                    "weather",
+                    round(lat, 3),
+                    round(lon, 3)
+                ),
                 ttl=900,
                 stale_ttl=172800
             )
@@ -419,7 +302,7 @@ class DashboardHandler(SimpleHTTPRequestHandler):
             timezone = params.get("timezone", [""])[0]
             method = params.get("method", ["4"])[0]
 
-            # Validate date.
+            # Validate date format.
             if not re.fullmatch(r"\d{2}-\d{2}-\d{4}", date):
                 self.send_json(400, {
                     "error": "Invalid date; expected DD-MM-YYYY"
@@ -442,7 +325,7 @@ class DashboardHandler(SimpleHTTPRequestHandler):
                 })
                 return
 
-            # Only allow the two supported calculation methods.
+            # Only allow the supported calculation methods.
             if method not in ("4", "16"):
                 self.send_json(400, {
                     "error": "Unsupported calculation method"
@@ -478,14 +361,6 @@ class DashboardHandler(SimpleHTTPRequestHandler):
                 + query
             )
 
-            logging.info(
-                "Prayer request: date=%s lat=%s lon=%s method=%s",
-                date,
-                lat,
-                lon,
-                method
-            )
-
             self.cached_proxy_json(
                 url,
                 cache_key=(
@@ -507,11 +382,8 @@ class DashboardHandler(SimpleHTTPRequestHandler):
         super().do_GET()
 
     def log_message(self, format_string, *args):
-        logging.info(
-            "%s - %s",
-            self.client_address[0],
-            format_string % args
-        )
+        # Suppress HTTP request logging.
+        pass
 
 
 if __name__ == "__main__":
@@ -522,27 +394,11 @@ if __name__ == "__main__":
         DashboardHandler
     )
 
-    logging.info(
-        "Dashboard directory: %s",
-        DASHBOARD_DIR
-    )
-
-    logging.info(
-        "Dashboard server: http://localhost:%s",
-        PORT
-    )
-
-    logging.info(
-        "Listening on %s:%s",
-        HOST,
-        PORT
-    )
-
     try:
         server.serve_forever()
 
     except KeyboardInterrupt:
-        logging.info("Shutting down dashboard server")
+        pass
 
     finally:
         server.server_close()
