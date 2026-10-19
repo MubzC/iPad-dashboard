@@ -619,9 +619,18 @@
 
         var currentRow = prayers[currentIndex].key;
 
-        // Sunrise is highlighted only during its displayed minute.
-        if (sunrise !== null && currentMinutes === sunrise) {
-            currentRow = "sunrise";
+        // Fajr highlighting ends at sunrise.
+        // Sunrise is highlighted during its displayed minute.
+        if (sunrise !== null) {
+            if (currentMinutes === sunrise) {
+                currentRow = "sunrise";
+            } else if (
+                currentMinutes > sunrise &&
+                currentMinutes < prayers[1].minutes
+            ) {
+                // Between sunrise and Dhuhr, highlight no Salah row.
+                currentRow = null;
+            }
         }
 
         /*
@@ -778,11 +787,42 @@
 
     }
 
+    function logLocationToServer(source, latitude, longitude, message) {
+        var xhr = new XMLHttpRequest();
+
+        xhr.open("POST", "/api/location-log", true);
+        xhr.setRequestHeader(
+            "Content-Type",
+            "application/json;charset=UTF-8"
+        );
+
+        xhr.onreadystatechange = function () {
+            if (xhr.readyState === 4 && xhr.status >= 400) {
+                console.warn("Location logging failed:", xhr.status);
+            }
+        };
+
+        xhr.onerror = function () {
+            console.warn("Could not send location log to server.");
+        };
+
+        xhr.send(JSON.stringify({
+            source: source,
+            latitude: latitude,
+            longitude: longitude,
+            message: message || "",
+            userAgent: navigator.userAgent
+        }));
+    }
+
     function loadWeather() {
+        var latitude = locationData.latitude;
+        var longitude = locationData.longitude;
+
         var url = "/api/weather?latitude=" +
-            encodeURIComponent(locationData.latitude) +
+            encodeURIComponent(latitude) +
             "&longitude=" +
-            encodeURIComponent(locationData.longitude);
+            encodeURIComponent(longitude);
 
         requestJSON(url, function (error, data) {
             if (error || !data || !data.current) {
@@ -858,63 +898,73 @@
     /* LOCATION */
 
     function loadLocation(callback) {
-        function applyLocation(latitude, longitude, source) {
+        function applyLocation(latitude, longitude, timezone, source) {
             locationData.latitude = latitude;
             locationData.longitude = longitude;
-            locationData.timezone =
-                Intl.DateTimeFormat().resolvedOptions().timeZone ||
-                locationData.timezone;
+            locationData.timezone = timezone;
             locationData.method = String(locationData.method || "4");
 
-            console.log("Location loaded from " + source + ":", {
-                latitude: latitude,
-                longitude: longitude
-            });
+            logLocationToServer(
+                source,
+                latitude,
+                longitude,
+                "Location loaded"
+            );
 
             if (callback) {
                 callback(null);
             }
         }
 
-        // Prefer the iPad's actual location over the server's IP location.
-        if (navigator.geolocation) {
-            navigator.geolocation.getCurrentPosition(
-                function (position) {
-                    applyLocation(
-                        position.coords.latitude,
-                        position.coords.longitude,
-                        "iPad GPS/browser geolocation"
-                    );
-                },
-                function (error) {
-                    console.warn(
-                        "Browser geolocation unavailable; using configured Dubai location.",
-                        error.message
-                    );
-
-                    // Keep the existing Dubai defaults.
-                    if (callback) {
-                        callback(null);
-                    }
-                },
-                {
-                    enableHighAccuracy: false,
-                    timeout: 10000,
-                    maximumAge: 900000
-                }
+        function useDefaultLocation() {
+            applyLocation(
+                25.2048,
+                55.2708,
+                "Asia/Dubai",
+                "configured Dubai fallback"
             );
+            logLocationToServer(
+                "geolocation-error",
+                locationData.latitude,
+                locationData.longitude,
+                error.message
+            );
+        }
 
+        if (!navigator.geolocation) {
+            console.warn("Browser geolocation is not supported.");
+            useDefaultLocation();
             return;
         }
 
-        // Browser geolocation is unavailable. Keep the configured defaults.
-        console.warn(
-            "Browser geolocation is not supported; using configured location."
+        navigator.geolocation.getCurrentPosition(
+            function (position) {
+                applyLocation(
+                    position.coords.latitude,
+                    position.coords.longitude,
+                    "Asia/Dubai",
+                    "iPad GPS/browser geolocation"
+                );
+                logLocationToServer(
+                    source,
+                    latitude,
+                    longitude,
+                    "Location loaded"
+                );
+            },
+            function (error) {
+                console.warn(
+                    "Browser geolocation unavailable; using Dubai fallback:",
+                    error.message
+                );
+                useDefaultLocation();
+            },
+            {
+                enableHighAccuracy: false,
+                timeout: 10000,
+                maximumAge: 900000
+            }
         );
-
-        if (callback) {
-            callback(null);
-        }
     }
 
     /* START */

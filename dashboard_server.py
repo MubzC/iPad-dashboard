@@ -265,7 +265,10 @@ class DashboardHandler(SimpleHTTPRequestHandler):
     def do_POST(self):
         parsed = urlparse(self.path)
 
-        if parsed.path != "/api/audio-debug":
+        if parsed.path not in (
+            "/api/audio-debug",
+            "/api/location-log"
+        ):
             self.send_json(404, {"error": "Not found"})
             return
 
@@ -281,21 +284,42 @@ class DashboardHandler(SimpleHTTPRequestHandler):
             body = self.rfile.read(content_length)
             data = json.loads(body.decode("utf-8"))
 
-            message = str(data.get("message", ""))[:1000]
-
-            # Identify the device by its IP address.
             device_ip = self.client_address[0]
 
-            logging.info(
-                "[AUDIO DEBUG] [%s] %s",
-                device_ip,
-                message
-            )
+            if parsed.path == "/api/audio-debug":
+                message = str(data.get("message", ""))[:1000]
 
-            self.send_json(200, {"ok": True})
+                logging.info(
+                    "[AUDIO DEBUG] [%s] %s",
+                    device_ip,
+                    message
+                )
 
-        except (ValueError, UnicodeDecodeError, json.JSONDecodeError):
-            self.send_json(400, {"error": "Invalid JSON"})
+                self.send_json(200, {"ok": True})
+                return
+
+        # Location diagnostics
+        source = str(data.get("source", "unknown"))[:100]
+        message = str(data.get("message", ""))[:500]
+        user_agent = str(data.get("userAgent", ""))[:300]
+
+        latitude = data.get("latitude")
+        longitude = data.get("longitude")
+
+        logging.info(
+            "[LOCATION] device_ip=%s source=%s lat=%s lon=%s message=%s user_agent=%s",
+            device_ip,
+            source,
+            latitude,
+            longitude,
+            message,
+            user_agent
+        )
+
+        self.send_json(200, {"ok": True})
+
+    except (ValueError, UnicodeDecodeError):
+        self.send_json(400, {"error": "Invalid JSON"})
     
     def do_GET(self):
         parsed = urlparse(self.path)
