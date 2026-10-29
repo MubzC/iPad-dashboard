@@ -13,7 +13,8 @@ var activeSequence = null;
 var sequenceToken = 0;
 var trackStartTimer = null;
 
-var CHECK_INTERVAL = 5000;
+var CHECK_INTERVAL = 30000;
+var playbackWatchdog = null;
 var RECOVERY_WINDOW_MINUTES = 10;
 
 var TEST_SCHEDULE_ENABLED = false;
@@ -33,7 +34,7 @@ var trackLabels = {
 // Short silent WAV used to prime the HTML audio element.
 var SILENT_WAV =
     "data:audio/wav;base64," +
-    "UklGRiQAAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQAAAAA=";
+    "UklGRkQDAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YSADAACAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgA==";
 
 // ---------------------------------------------------------
 // GENERAL HELPERS
@@ -117,6 +118,13 @@ function getAudioSource(track) {
     return "audio/quran/" + track + "-" + narrator + ".mp3";
 }
 
+function clearPlaybackWatchdog() {
+    if (playbackWatchdog !== null) {
+        window.clearInterval(playbackWatchdog);
+        playbackWatchdog = null;
+    }
+}
+
 function clearTrackStartTimer() {
     if (trackStartTimer !== null) {
         window.clearTimeout(trackStartTimer);
@@ -197,6 +205,7 @@ function stopAudio(updateMessage) {
     sequenceToken++;
     activeSequence = null;
 
+    clearPlaybackWatchdog();
     clearTrackStartTimer();
     stopBeep();
 
@@ -305,17 +314,6 @@ function initialiseScheduledAudio() {
         document.body.appendChild(audioPlayer);
     }
 
-    var AudioContextClass =
-        window.AudioContext || window.webkitAudioContext;
-
-    if (AudioContextClass && !audioContext) {
-        try {
-            audioContext = new AudioContextClass();
-        } catch (error) {
-            // AudioContext is optional; HTML audio playback remains available.
-        }
-    }
-
     return audioPlayer;
 }
 
@@ -345,6 +343,7 @@ function primeAudioPlayer() {
                  */
                 window.setTimeout(function () {
                     try {
+                        if (activeSequence !== null || player.getAttribute("src") !== SILENT_WAV) { return; }
                         player.pause();
                         player.removeAttribute("src");
                         player.load();
@@ -382,7 +381,7 @@ function primeAudioPlayer() {
 // PLAY AUDIO SEQUENCE
 // ---------------------------------------------------------
 
-function playSequence(tracks, description) {
+function playSequence(tracks, description, onStarted) {
     // Never restart a sequence that is already playing.
     if (activeSequence !== null) {
         return;
@@ -415,6 +414,7 @@ function playSequence(tracks, description) {
         }
 
         clearTrackStartTimer();
+        clearPlaybackWatchdog();
 
         if (index >= tracks.length) {
             activeSequence = null;
@@ -431,6 +431,80 @@ function playSequence(tracks, description) {
         }
 
         var hasStarted = false;
+        var trackIndex = index;
+        var lastPosition = 0;
+        var lastProgressAt = Date.now();
+        var recoveryAttempts = 0;
+        var resumePosition = null;
+
+        function isCurrentTrack() {
+            return thisSequenceToken === sequenceToken &&
+                activeSequence !== null && trackIndex === index;
+        }
+
+        function failTrack(message) {
+            if (!isCurrentTrack()) { return; }
+            clearPlaybackWatchdog();
+            clearTrackStartTimer();
+            activeSequence = null;
+            player.pause();
+            setStatus(message);
+        }
+
+        function recoverTrack() {
+            if (!isCurrentTrack()) { return; }
+            if (recoveryAttempts >= 3) {
+                failTrack("Playback interrupted for " + (trackLabels[track] || track) +
+                    ". Check Wi-Fi/server, then tap Play MP3 to retry.");
+                return;
+            }
+            recoveryAttempts++;
+            resumePosition = Math.max(lastPosition, player.currentTime || 0);
+            lastProgressAt = Date.now();
+            setStatus("Reconnecting " + (trackLabels[track] || track) +
+                " at " + Math.floor(resumePosition) + " seconds...");
+            player.load();
+            requestPlay();
+        }
+
+        function requestPlay() {
+            try {
+                var request = player.play();
+                if (request && typeof request.then === "function") {
+                    request.then(function () {}, function (error) {
+                        if (!isCurrentTrack()) { return; }
+                        if (error.name === "NotAllowedError") {
+                            failTrack("Safari blocked playback. Tap Play MP3 to enable audio again.");
+                        }
+                        // Network failures are retried by the bounded watchdog.
+                    });
+                }
+            } catch (error) {
+                failTrack("Playback failed: " + (error.name || error.message || error));
+            }
+        }
+
+        player.onloadedmetadata = function () {
+            if (!isCurrentTrack() || resumePosition === null) { return; }
+            try {
+                player.currentTime = resumePosition;
+                resumePosition = null;
+            } catch (error) {
+                failTrack("Unable to resume recording. Tap Play MP3 to restart.");
+            }
+        };
+        player.ontimeupdate = function () {
+            if (!isCurrentTrack()) { return; }
+            if (player.currentTime > lastPosition + 0.1) {
+                lastPosition = player.currentTime;
+                lastProgressAt = Date.now();
+            }
+        };
+        playbackWatchdog = window.setInterval(function () {
+            if (isCurrentTrack() && !player.ended && Date.now() - lastProgressAt > 45000) {
+                recoverTrack();
+            }
+        }, 15000);
 
         player.onplaying = function () {
             if (thisSequenceToken !== sequenceToken) {
@@ -438,6 +512,10 @@ function playSequence(tracks, description) {
             }
 
             hasStarted = true;
+            if (onStarted) {
+                onStarted();
+                onStarted = null;
+            }
             clearTrackStartTimer();
 
             setStatus(
@@ -456,18 +534,12 @@ function playSequence(tracks, description) {
         };
 
         player.onerror = function () {
-            if (thisSequenceToken !== sequenceToken) {
-                return;
+            if (!isCurrentTrack()) { return; }
+            if (player.error && (player.error.code === 3 || player.error.code === 4)) {
+                failTrack("Audio file cannot be decoded. Check the MP3 file for " +
+                    (trackLabels[track] || track) + ".");
             }
-
-            clearTrackStartTimer();
-            activeSequence = null;
-
-            setStatus(
-                "Unable to play " +
-                (trackLabels[track] || track) +
-                ". Check the audio file and connection."
-            );
+            // Transient network errors use the watchdog, avoiding retry loops.
         };
 
         player.onabort = function () { };
@@ -476,13 +548,12 @@ function playSequence(tracks, description) {
 
         try {
             player.pause();
-            player.removeAttribute("src");
-            player.load();
         } catch (resetError) {
             // Continue with assigning the next source.
         }
 
         player.src = source;
+        player.load();
 
         setStatus("Loading " + (trackLabels[track] || track) + "...");
 
@@ -522,38 +593,7 @@ function playSequence(tracks, description) {
             }
         }, PLAYBACK_START_TIMEOUT_MS);
 
-        try {
-            var result = player.play();
-
-            if (result && typeof result.then === "function") {
-                result.then(function () {
-                    if (thisSequenceToken !== sequenceToken) {
-                        return;
-                    }
-                }, function (error) {
-                    if (thisSequenceToken !== sequenceToken) {
-                        return;
-                    }
-
-                    clearTrackStartTimer();
-                    activeSequence = null;
-
-                    setStatus(
-                        "Playback failed for " +
-                        (trackLabels[track] || track) +
-                        ": " + (error.name || error.message || error)
-                    );
-                });
-            }
-        } catch (error) {
-            clearTrackStartTimer();
-            activeSequence = null;
-
-            setStatus(
-                "Playback failed: " +
-                (error.name || error.message || error)
-            );
-        }
+        requestPlay();
     }
 
     playNextTrack();
@@ -584,11 +624,13 @@ function playManualTrack() {
 function getScheduledTracks(scheduleType) {
     var tracks = [];
 
-    if (scheduleType === "daily") {
+    if (scheduleType === "daily" || scheduleType === "baqarah") {
         if (isTrackEnabled("baqarah")) {
             tracks.push("baqarah");
         }
+    }
 
+    if (scheduleType === "daily" || scheduleType === "yaseen") {
         if (isTrackEnabled("yaseen")) {
             tracks.push("yaseen");
         }
@@ -622,7 +664,7 @@ function checkSchedule() {
 
         if (TEST_SCHEDULE_ENABLED) {
             schedules = [{
-                type: "daily",
+                type: "baqarah",
                 hour: TEST_SCHEDULE_TIME.getHours(),
                 minute: TEST_SCHEDULE_TIME.getMinutes(),
                 appliesToday: true,
@@ -631,8 +673,15 @@ function checkSchedule() {
         } else {
             schedules = [
                 {
-                    type: "daily",
+                    type: "baqarah",
                     hour: 2,
+                    minute: 0,
+                    appliesToday: true,
+                    test: false
+                },
+                {
+                    type: "yaseen",
+                    hour: 5,
                     minute: 0,
                     appliesToday: true,
                     test: false
@@ -700,8 +749,6 @@ function checkSchedule() {
                 return;
             }
 
-            markScheduleRun(scheduleId);
-
             var result = getScheduledTracks(schedule.type);
 
             if (result.error) {
@@ -714,11 +761,20 @@ function checkSchedule() {
                 return;
             }
 
-            var description = schedule.type === "daily"
-                ? "Daily 2:00 AM audio"
-                : "Friday 12:15 PM audio";
+            var description;
 
-            playSequence(result.tracks, description);
+            if (schedule.type === "baqarah") {
+                description = "Daily 2:00 AM Surah Al-Baqarah";
+            } else if (schedule.type === "yaseen") {
+                description = "Daily 5:00 AM Surah Yaseen";
+            } else {
+                description = "Friday 12:15 PM Surah Al-Kahf";
+            }
+
+            playSequence(result.tracks, description, function () {
+                // A blocked or failed start must not consume today's schedule.
+                markScheduleRun(scheduleId);
+            });
         });
     } catch (error) {
         // Prevent an unexpected scheduler error from stopping future checks.
@@ -738,6 +794,7 @@ function init() {
             if (event) {
                 event.preventDefault();
             }
+            if (startOverlay.style.display === "none") { return; }
 
             if (TEST_SCHEDULE_ENABLED) {
                 TEST_SCHEDULE_TIME = new Date(Date.now() + 60000);

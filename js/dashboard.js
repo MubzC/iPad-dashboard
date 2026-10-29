@@ -3,7 +3,7 @@
 
     var CONFIG = {
         rotationInterval: 30000,
-        clockInterval: 1000,
+        clockInterval: 60000,
         highlightAndThemeInterval: 60000,
         weatherInterval: 900000,
         prayerRefreshInterval: 3600000
@@ -157,6 +157,7 @@
     app.addEventListener("click", handleClick, false);
     /* CLOCK */
     function updateClock() {
+        if (document.hidden) { return; }
         var now = new Date();
         var hours = now.getHours();
         var minutes = now.getMinutes();
@@ -715,13 +716,26 @@
     function start() {
         updateClock();
         updateTheme();
-        window.setInterval(updateClock, CONFIG.clockInterval);
+        // Align updates to the minute without repainting every second.
+        window.setTimeout(function () {
+            updateClock();
+            window.setInterval(updateClock, CONFIG.clockInterval);
+        }, 60000 - (Date.now() % 60000));
+        document.addEventListener("visibilitychange", function () {
+            if (!document.hidden) {
+                updateClock();
+                updatePrayerHighlights();
+                updateTheme();
+                checkPrayerDate();
+            }
+        }, false);
         window.setInterval(function () {
             updatePrayerHighlights();
             updateTheme();
             checkPrayerDate();
         }, CONFIG.highlightAndThemeInterval);
         window.setInterval(function () {
+            if (document.hidden) { return; }
             if (!window.isSettingsModalOpen ||
                 !window.isSettingsModalOpen()) {
                 advancePage();

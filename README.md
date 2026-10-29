@@ -7,7 +7,7 @@ A personal living room dashboard designed to run on an iPad using Safari. It pro
 - **iPad-friendly interface** — Designed for use on an iPad through Safari.
 - **Scheduled Quran recitation** — Plays selected recitations according to a configured schedule.
 - **Surah Al-Baqarah** — Daily scheduled playback.
-- **Surah Ya-Sin** — Daily scheduled playback following Al-Baqarah.
+- **Surah Ya-Sin** — Daily scheduled playback at 05:00.
 - **Surah Al-Kahf** — Scheduled playback on Fridays.
 - **Audio settings** — Manage audio-related preferences through the dashboard.
 - **Local audio files** — Quran recitations are stored within the project.
@@ -20,7 +20,8 @@ The intended schedule uses UAE local time (GST, UTC+4).
 
 | Day | Time | Recitation |
 |---|---|---|
-| Daily | 02:00 | Surah Al-Baqarah, followed by Surah Ya-Sin |
+| Daily | 02:00 | Surah Al-Baqarah |
+| Daily | 05:00 | Surah Ya-Sin |
 | Friday | 12:15 | Surah Al-Kahf |
 
 Actual playback depends on the host server, network availability, and iPadOS/Safari background behaviour.
@@ -42,3 +43,13 @@ ipad/
 ├── dashboard_server.py
 ├── startup_dashboard.sh
 └── README.md
+
+## Continuous operation on iOS 9.3.5
+
+See `SETUP-24-7.md` for deployment, power and playback verification.
+
+The Python server supports MP3 byte ranges for Safari. Run this server rather
+than `python -m http.server`. The audio player attempts up to three reconnects
+per track after 45 seconds without playback progress, seeking to the last
+position. Stop cancels recovery. Safari permission/decoding errors are shown
+under Settings > Audio Test. No silent audio loop or video wake-lock is used.

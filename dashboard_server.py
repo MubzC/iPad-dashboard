@@ -10,7 +10,7 @@ from urllib.parse import urlparse, parse_qs, urlencode
 from urllib.request import Request, urlopen
 
 
-DASHBOARD_DIR = r"./"
+DASHBOARD_DIR = os.path.dirname(os.path.abspath(__file__))
 
 PORT = int(os.environ.get("PORT", 8000))
 HOST = "0.0.0.0"
@@ -25,6 +25,70 @@ class DashboardHandler(SimpleHTTPRequestHandler):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, directory=DASHBOARD_DIR, **kwargs)
+
+    def send_head(self):
+        """Safari probes and resumes MP3s with single byte-range requests."""
+        self.media_bytes_remaining = None
+        path = self.translate_path(self.path)
+        if not path.lower().endswith(".mp3") or not os.path.isfile(path):
+            return super().send_head()
+
+        source = open(path, "rb")
+        size = os.fstat(source.fileno()).st_size
+        start, end = 0, size - 1
+        range_header = self.headers.get("Range")
+        # Without a validator, honor If-Range by sending the complete file.
+        partial = bool(range_header and not self.headers.get("If-Range"))
+        if partial:
+            match = re.fullmatch(r"bytes=(\d*)-(\d*)", range_header.strip())
+            try:
+                if not match or not any(match.groups()):
+                    raise ValueError("Invalid range")
+                first, last = match.groups()
+                if first:
+                    start = int(first)
+                    end = min(int(last), size - 1) if last else size - 1
+                else:
+                    length = int(last)
+                    if length <= 0:
+                        raise ValueError("Invalid suffix")
+                    start = max(0, size - length)
+                if start > end or start >= size:
+                    raise ValueError("Unsatisfiable range")
+            except ValueError:
+                source.close()
+                self.send_response(416)
+                self.send_header("Content-Range", "bytes */%d" % size)
+                self.send_header("Content-Length", "0")
+                self.end_headers()
+                return None
+
+        self.send_response(206 if partial else 200)
+        self.send_header("Content-Type", "audio/mpeg")
+        self.send_header("Accept-Ranges", "bytes")
+        self.send_header("Content-Length", str(end - start + 1))
+        self.send_header("Last-Modified", self.date_time_string(os.fstat(source.fileno()).st_mtime))
+        if partial:
+            self.send_header("Content-Range", "bytes %d-%d/%d" % (start, end, size))
+        self.end_headers()
+        source.seek(start)
+        self.media_bytes_remaining = end - start + 1
+        return source
+
+    def copyfile(self, source, outputfile):
+        remaining = getattr(self, "media_bytes_remaining", None)
+        try:
+            if remaining is None:
+                return super().copyfile(source, outputfile)
+            while remaining > 0:
+                chunk = source.read(min(65536, remaining))
+                if not chunk:
+                    break
+                outputfile.write(chunk)
+                remaining -= len(chunk)
+        except (BrokenPipeError, ConnectionResetError):
+            # Safari can cancel its probe or switch to a new range.
+            pass
 
     def send_json(self, status, data):
         body = json.dumps(data).encode("utf-8")
