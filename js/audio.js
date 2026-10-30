@@ -471,7 +471,7 @@ function playSequence(tracks, description, onStarted) {
             try {
                 var request = player.play();
                 if (request && typeof request.then === "function") {
-                    request.then(function () {}, function (error) {
+                    request.then(function () { }, function (error) {
                         if (!isCurrentTrack()) { return; }
                         if (error.name === "NotAllowedError") {
                             failTrack("Safari blocked playback. Tap Play MP3 to enable audio again.");
@@ -681,7 +681,7 @@ function checkSchedule() {
                 },
                 {
                     type: "yaseen",
-                    hour: 5,
+                    hour: 6,
                     minute: 0,
                     appliesToday: true,
                     test: false
@@ -689,7 +689,7 @@ function checkSchedule() {
                 {
                     type: "friday",
                     hour: 12,
-                    minute: 15,
+                    minute: 10,
                     appliesToday: day === 5,
                     test: false
                 }
